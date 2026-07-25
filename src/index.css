@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-sans: 'Inter', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0F0B1E;
+    color: #F8FAFC;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+/* Custom Utilities for Glassmorphism & SaaS aesthetic */
+.glass-card {
+  background: rgba(30, 27, 58, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-hover:hover {
+  background: rgba(38, 34, 74, 0.7);
+  border-color: rgba(124, 92, 252, 0.3);
+  box-shadow: 0 10px 30px -10px rgba(124, 92, 252, 0.25);
+  transform: translateY(-2px);
+}
+
+.glass-input {
+  background: rgba(20, 16, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #F8FAFC;
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: #7C5CFC;
+  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.2);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 50%, #7C5CFC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-cyan {
+  background: linear-gradient(135deg, #38BDF8 0%, #7C5CFC 50%, #E879F9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-bg-accent {
+  background: linear-gradient(135deg, #7C5CFC 0%, #6366F1 50%, #22D3EE 100%);
+}
+
+.gradient-border {
+  position: relative;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(124, 92, 252, 0.4), rgba(34, 211, 238, 0.2));
+  padding: 1px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F0B1E;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A264E;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7C5CFC;
+}
+
+/* Keyframe Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
