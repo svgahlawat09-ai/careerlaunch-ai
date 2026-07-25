@@ -2,7 +2,7 @@
   "name": "careerlaunch-ai",
   "private": true,
   "version": "1.0.0",
-  "homepage": "https://sarikagahlawat.github.io/careerlaunch-ai",
+  "homepage": "https://svgahlawat09-ai.github.io/careerlaunch-ai",
   "type": "module",
   "scripts": {
     "dev": "vite",
