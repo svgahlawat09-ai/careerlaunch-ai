@@ -15,10 +15,29 @@ import {
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { jsPDF } from 'jspdf';
+import * as pdfjsLib from 'pdfjs-dist';
 import { useApp } from '../context/AppContext';
 import { TARGET_ROLES, SAMPLE_RESUME_TEXT } from '../data/mockData';
-import { analyzeResume } from '../lib/aiEngine';
+import { analyzeResume, analyzeResumeGemini } from '../lib/aiEngine';
 import Skeleton from '../components/Skeleton';
+
+// Setup pdfjs worker path
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '5.6.205'}/build/pdf.worker.min.mjs`;
+
+// Helper function to extract text from a PDF file
+const extractPdfText = async (file) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+  const pdf = await loadingTask.promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    text += pageText + '\n';
+  }
+  return text;
+};
 
 export default function ResumeChecker() {
   const { state, dispatch, addToast } = useApp();
@@ -45,16 +64,12 @@ export default function ResumeChecker() {
         const result = await mammoth.extractRawText({ arrayBuffer });
         extractedText = result.value;
       } else if (file.name.endsWith('.pdf')) {
-        // Simple PDF text fallback or plain text fallback if pdfjs worker is detached
         try {
+          extractedText = await extractPdfText(file);
+        } catch (pdfErr) {
+          console.error("pdfjs text extraction failed, falling back to raw read:", pdfErr);
           const text = await file.text();
-          // Filter readable characters
           extractedText = text.replace(/[^\x20-\x7E\n\r\t]/g, ' ');
-          if (extractedText.trim().length < 50) {
-            extractedText = SAMPLE_RESUME_TEXT; // fallback to sample if binary stream
-          }
-        } catch (e) {
-          extractedText = SAMPLE_RESUME_TEXT;
         }
       } else {
         extractedText = await file.text();
@@ -68,23 +83,40 @@ export default function ResumeChecker() {
       runAnalysis(extractedText, targetRole);
     } catch (err) {
       console.error(err);
-      addToast('Could not parse file binary. Loaded sample text for analysis.', 'info');
+      addToast('Could not parse file. Loaded sample text for analysis.', 'info');
       setInputText(SAMPLE_RESUME_TEXT);
       runAnalysis(SAMPLE_RESUME_TEXT, targetRole);
     }
   };
 
-  const runAnalysis = (text, role) => {
+  const runAnalysis = async (text, role) => {
     setIsAnalyzing(true);
-    setTimeout(() => {
+    addToast('Running ATS Resume Checker...', 'info');
+    try {
+      let result;
+      if (state.apiKey) {
+        result = await analyzeResumeGemini(state.apiKey, text, role);
+      } else {
+        // Mock a brief delay for realistic loading UX
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        result = analyzeResume(text, role);
+      }
+      dispatch({
+        type: 'SET_RESUME_ANALYSIS',
+        payload: { text, analysis: result }
+      });
+      addToast('ATS Resume Analysis Complete!', 'success');
+    } catch (err) {
+      console.error(err);
       const result = analyzeResume(text, role);
       dispatch({
         type: 'SET_RESUME_ANALYSIS',
         payload: { text, analysis: result }
       });
+      addToast('Analysis complete (local fallback).', 'info');
+    } finally {
       setIsAnalyzing(false);
-      addToast('ATS Resume Analysis Complete!', 'success');
-    }, 1200);
+    }
   };
 
   const handleRoleChange = (e) => {
@@ -336,7 +368,7 @@ export default function ResumeChecker() {
               {/* Detected Sections Panel */}
               <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">Detected Resume Sections</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-7 gap-3">
                   {Object.entries(analysis.sectionCheck).map(([sec, detected]) => (
                     <div
                       key={sec}
@@ -347,34 +379,94 @@ export default function ResumeChecker() {
                       }`}
                     >
                       {detected ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                      <span className="text-xs font-semibold capitalize">{sec}</span>
+                      <span className="text-[10px] font-semibold capitalize">{sec}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Missing Keywords Chips */}
-              <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Missing Industry Keywords</h3>
-                  <span className="text-xs text-slate-400">{analysis.missingKeywords.length} missing</span>
+              {/* ATS Weighted Breakdown */}
+              {analysis.atsBreakdown && (
+                <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-4">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">ATS Score Criteria Breakdown</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                      { label: 'Skills Match (35%)', data: analysis.atsBreakdown.skillsMatch },
+                      { label: 'Experience Relevance (20%)', data: analysis.atsBreakdown.experienceRelevance },
+                      { label: 'Keyword Coverage (15%)', data: analysis.atsBreakdown.keywordCoverage },
+                      { label: 'Education (10%)', data: analysis.atsBreakdown.education },
+                      { label: 'Resume Structure (10%)', data: analysis.atsBreakdown.resumeStructure },
+                      { label: 'Projects (10%)', data: analysis.atsBreakdown.projects }
+                    ].map((item, idx) => (
+                      <div key={idx} className="space-y-1 bg-white/5 p-3 rounded-xl border border-white/5 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-slate-200">{item.label}</span>
+                          <span className={`font-bold ${
+                            item.data.score >= 80 ? 'text-emerald-400' : item.data.score >= 50 ? 'text-amber-400' : 'text-rose-400'
+                          }`}>
+                            {item.data.score} / 100
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-[10px] leading-relaxed mt-0.5">{item.data.reason}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {analysis.missingKeywords.length > 0 ? (
-                    analysis.missingKeywords.map((kw) => (
-                      <span
-                        key={kw}
-                        className="px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium"
-                      >
-                        + {kw}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-emerald-400 font-semibold">
-                      All key role terms detected! Great job.
+              )}
+
+              {/* Detected and Missing Skills Grids */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                
+                {/* Detected Skills */}
+                <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Detected Skills</h3>
+                    <span className="text-[10px] text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full font-semibold">
+                      {analysis.matchedKeywords?.length || 0} found
                     </span>
-                  )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.matchedKeywords?.length > 0 ? (
+                      analysis.matchedKeywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium"
+                        >
+                          ✓ {kw}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">No matching skills detected.</span>
+                    )}
+                  </div>
                 </div>
+
+                {/* Missing Skills */}
+                <div className="glass-card rounded-2xl p-6 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Missing Skills</h3>
+                    <span className="text-[10px] text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-full font-semibold">
+                      {analysis.missingKeywords?.length || 0} missing
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.missingKeywords?.length > 0 ? (
+                      analysis.missingKeywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] font-medium"
+                        >
+                          + {kw}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-emerald-400 font-semibold">
+                        All key role terms detected! Great job.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
               {/* Actionable Improvement Tips */}

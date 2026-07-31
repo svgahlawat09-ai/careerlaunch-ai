@@ -11,13 +11,16 @@ import {
   Menu, 
   X, 
   User,
-  Sparkles
+  Sparkles,
+  Key
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { state } = useApp();
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const { state, dispatch, addToast } = useApp();
+  const [keyInput, setKeyInput] = useState(state.apiKey || '');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,6 +35,17 @@ export default function Navbar() {
   ];
 
   const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(state.user.avatarSeed || 'Alex Morgan')}`;
+
+  const handleSaveKey = (e) => {
+    e.preventDefault();
+    dispatch({ type: 'SET_API_KEY', payload: keyInput.trim() });
+    if (keyInput.trim()) {
+      addToast('Gemini API Key saved! Premium AI Features Enabled.', 'success');
+    } else {
+      addToast('Gemini API Key removed. Using Local Smart Heuristics.', 'info');
+    }
+    setShowKeyModal(false);
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#0F0B1E]/80 border-b border-white/10 transition-all">
@@ -59,7 +73,6 @@ export default function Navbar() {
         <nav className="hidden lg:flex items-center space-x-1 bg-white/5 p-1.5 rounded-full border border-white/10">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
 
             return (
               <NavLink
@@ -82,6 +95,21 @@ export default function Navbar() {
 
         {/* User Profile / Dashboard Pill */}
         <div className="hidden sm:flex items-center space-x-3">
+          {/* API Key Configure Button */}
+          <button
+            onClick={() => {
+              setKeyInput(state.apiKey || '');
+              setShowKeyModal(true);
+            }}
+            className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white cursor-pointer relative"
+            title="Configure Gemini API Key"
+          >
+            <Key className="w-3.5 h-3.5 text-cyan-400" />
+            {state.apiKey && (
+              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            )}
+          </button>
+
           <button
             onClick={() => navigate('/dashboard')}
             className="flex items-center space-x-2.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group"
@@ -99,6 +127,18 @@ export default function Navbar() {
 
         {/* Mobile Hamburger Toggle */}
         <div className="lg:hidden flex items-center space-x-2">
+          {/* Mobile Key Button */}
+          <button
+            onClick={() => {
+              setKeyInput(state.apiKey || '');
+              setShowKeyModal(true);
+            }}
+            className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-300 focus:outline-none"
+            title="Configure Gemini API Key"
+          >
+            <Key className="w-5 h-5 text-cyan-400" />
+          </button>
+
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white focus:outline-none"
@@ -146,6 +186,67 @@ export default function Navbar() {
               </div>
               <User className="w-4 h-4 text-slate-400" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-card rounded-3xl p-6 border border-white/15 max-w-md w-full space-y-5 animate-in fade-in zoom-in-95 duration-200 text-left">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-white text-base flex items-center space-x-2">
+                <Key className="w-5 h-5 text-cyan-400" />
+                <span>Gemini API Key Settings</span>
+              </h3>
+              <button 
+                onClick={() => setShowKeyModal(false)}
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Enable premium AI features for high-fidelity resume extraction, weighted ATS feedback, live career coaching, and customized STAR-framework interview questions. 
+              Your key is saved locally in your browser storage and is never sent to any third-party backend.
+            </p>
+
+            <form onSubmit={handleSaveKey} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[11px] text-slate-300 font-semibold uppercase tracking-wider">
+                  Gemini API Key:
+                </label>
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full glass-input p-3 rounded-xl text-xs focus:outline-none focus:border-[#7C5CFC]"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeyInput('');
+                    dispatch({ type: 'SET_API_KEY', payload: '' });
+                    addToast('API Key cleared.', 'info');
+                    setShowKeyModal(false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-semibold"
+                >
+                  Clear Key
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg cursor-pointer"
+                >
+                  Save API Key
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

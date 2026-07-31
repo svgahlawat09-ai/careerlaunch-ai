@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Briefcase, 
@@ -7,16 +7,82 @@ import {
   DollarSign, 
   Calendar, 
   CheckCircle2, 
-  Star, 
   X, 
   Send, 
   Building2, 
-  Filter, 
-  Sparkles 
+  Sparkles,
+  Clock
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MOCK_INTERNSHIPS } from '../data/mockData';
 import { matchInternships } from '../lib/aiEngine';
+import Skeleton from '../components/Skeleton';
+
+// Mapping helper for RemoteOK jobs
+const mapRemoteOKJob = (job) => {
+  let roleCategory = 'software-engineer';
+  const title = (job.position || '').toLowerCase();
+  
+  if (title.includes('react') || title.includes('frontend') || title.includes('css')) roleCategory = 'frontend';
+  else if (title.includes('node') || title.includes('backend') || title.includes('express') || title.includes('spring')) roleCategory = 'backend';
+  else if (title.includes('data') || title.includes('analyst') || title.includes('analytics')) roleCategory = 'data-analyst';
+  else if (title.includes('product') || title.includes('manager') || title.includes('pm')) roleCategory = 'product-manager';
+  else if (title.includes('machine learning') || title.includes('ml') || title.includes('ai') || title.includes('deep learning')) roleCategory = 'ml-engineer';
+
+  const stipendVal = job.salary ? `$${(job.salary / 12).toFixed(0)} - $${((job.salary * 1.2) / 12).toFixed(0)} / mo` : '$2,800 - $3,600 / mo';
+
+  return {
+    id: `remoteok-${job.id || Math.random()}`,
+    title: job.position || 'Software Engineering Intern',
+    company: job.company || 'Tech Partner',
+    location: job.location || 'Remote',
+    stipend: stipendVal,
+    duration: '3 - 6 Months',
+    applyDeadline: 'Rolling Basis',
+    skills: job.tags && job.tags.length > 0 ? job.tags : ['JavaScript', 'React', 'Git'],
+    postedDate: job.date ? new Date(job.date).toLocaleDateString() : 'Recently',
+    url: job.url || 'https://remoteok.com',
+    description: job.description ? job.description.replace(/<[^>]*>/g, '').substring(0, 300) + '...' : 'Remote engineering internship role.',
+    requirements: [
+      'Experience with version control tools like Git.',
+      'Basic understanding of core software lifecycle.',
+      'Strong collaborative communication skills.'
+    ],
+    roleCategory
+  };
+};
+
+// Mapping helper for Arbeitnow jobs
+const mapArbeitnowJob = (job) => {
+  let roleCategory = 'software-engineer';
+  const title = (job.title || '').toLowerCase();
+  
+  if (title.includes('react') || title.includes('frontend') || title.includes('css')) roleCategory = 'frontend';
+  else if (title.includes('node') || title.includes('backend') || title.includes('express') || title.includes('spring')) roleCategory = 'backend';
+  else if (title.includes('data') || title.includes('analyst') || title.includes('analytics')) roleCategory = 'data-analyst';
+  else if (title.includes('product') || title.includes('manager') || title.includes('pm')) roleCategory = 'product-manager';
+  else if (title.includes('machine learning') || title.includes('ml') || title.includes('ai') || title.includes('deep learning')) roleCategory = 'ml-engineer';
+
+  return {
+    id: `arbeitnow-${job.slug || Math.random()}`,
+    title: job.title || 'Developer Intern',
+    company: job.company_name || 'Innovations Ltd',
+    location: job.location || 'Europe (Remote)',
+    stipend: '$2,400 - $3,200 / mo',
+    duration: '6 Months',
+    applyDeadline: 'ASAP',
+    skills: job.tags && job.tags.length > 0 ? job.tags : ['Node.js', 'API', 'Docker'],
+    postedDate: 'Recently',
+    url: job.url || 'https://www.arbeitnow.com',
+    description: job.description ? job.description.replace(/<[^>]*>/g, '').substring(0, 300) + '...' : 'Live internship opportunity.',
+    requirements: [
+      'Enrolled or graduated in a computer science degree or boot camp.',
+      'Familiarity with web technologies and relational databases.',
+      'Passion for solving real-world challenges.'
+    ],
+    roleCategory
+  };
+};
 
 export default function Internships() {
   const { state, dispatch, addToast } = useApp();
@@ -24,17 +90,72 @@ export default function Internships() {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('All');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(state.user.targetRole || 'All');
 
-  // Modal State
+  // API State
+  const [jobs, setJobs] = useState([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [selectedInternship, setSelectedInternship] = useState(null);
-  const [showApplyModal, setShowApplyModal] = useState(false);
-  const [applicantName, setApplicantName] = useState(state.user.name || 'Alex Morgan');
-  const [applicantNote, setApplicantNote] = useState('I am excited to apply for this internship role!');
 
-  // Match internships against user skill profile
-  const userSkillList = Object.keys(state.userSkills);
-  const matchedInternships = matchInternships(userSkillList, state.user.targetRole || 'frontend', MOCK_INTERNSHIPS);
+  // Fetch live jobs on load
+  const fetchLiveJobs = async () => {
+    setIsLoadingJobs(true);
+    let allFetchedJobs = [];
+    
+    // 1. RemoteOK API
+    try {
+      const response = await fetch('https://remoteok.com/api');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 1) {
+          const remoteOkJobs = data.slice(1).map(job => mapRemoteOKJob(job));
+          allFetchedJobs = [...allFetchedJobs, ...remoteOkJobs];
+        }
+      }
+    } catch (e) {
+      console.warn("RemoteOK API failed or blocked by CORS, skipping:", e);
+    }
+
+    // 2. Arbeitnow API
+    try {
+      const response = await fetch('https://www.arbeitnow.com/api/job-board-api');
+      if (response.ok) {
+        const json = await response.json();
+        if (json && Array.isArray(json.data)) {
+          const arbeitnowJobs = json.data.map(job => mapArbeitnowJob(job));
+          allFetchedJobs = [...allFetchedJobs, ...arbeitnowJobs];
+        }
+      }
+    } catch (e) {
+      console.warn("Arbeitnow API failed, skipping:", e);
+    }
+
+    // Fallback if all APIs fail or are empty
+    if (allFetchedJobs.length === 0) {
+      allFetchedJobs = MOCK_INTERNSHIPS.map(item => ({
+        ...item,
+        url: 'https://wellfound.com/jobs' // Ensure real apply url fallback
+      }));
+      addToast('CORS/API limits active. Loaded premium fallback listings.', 'info');
+    } else {
+      addToast(`Loaded ${allFetchedJobs.length} live internship opportunities!`, 'success');
+    }
+
+    setJobs(allFetchedJobs);
+    setIsLoadingJobs(false);
+  };
+
+  useEffect(() => {
+    fetchLiveJobs();
+  }, []);
+
+  // Match internships against user skill profile and resume text
+  const matchedInternships = matchInternships(
+    state.resumeText || '', 
+    state.user.targetRole || 'frontend', 
+    jobs,
+    state.userSkills
+  );
 
   // Filter listings
   const filteredListings = matchedInternships.filter((item) => {
@@ -43,26 +164,23 @@ export default function Internships() {
                           item.skills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesLocation = selectedLocation === 'All' || 
-                            (selectedLocation === 'Remote' && item.location.includes('Remote')) ||
-                            (selectedLocation === 'Hybrid' && item.location.includes('Hybrid')) ||
-                            (selectedLocation === 'On-site' && item.location.includes('On-site'));
+                            (selectedLocation === 'Remote' && item.location.toLowerCase().includes('remote')) ||
+                            (selectedLocation === 'Hybrid' && item.location.toLowerCase().includes('hybrid')) ||
+                            (selectedLocation === 'On-site' && !item.location.toLowerCase().includes('remote') && !item.location.toLowerCase().includes('hybrid'));
 
     const matchesCategory = selectedCategory === 'All' || item.roleCategory === selectedCategory;
 
     return matchesSearch && matchesLocation && matchesCategory;
   });
 
-  const handleApplySubmit = (e) => {
-    e.preventDefault();
-    if (!selectedInternship) return;
-
+  const handleApplyClick = (internship) => {
     dispatch({
       type: 'APPLY_INTERNSHIP',
-      payload: selectedInternship
+      payload: internship
     });
 
-    addToast(`Application submitted to ${selectedInternship.company}!`, 'success');
-    setShowApplyModal(false);
+    addToast(`Opening ${internship.company} application in a new tab!`, 'success');
+    window.open(internship.url, '_blank', 'noopener,noreferrer');
     setSelectedInternship(null);
   };
 
@@ -76,17 +194,17 @@ export default function Internships() {
           <span>Smart Internship Recommendations</span>
         </h1>
         <p className="text-slate-400 text-sm mt-1">
-          Explore top internship opportunities cross-referenced with your skill profile and target role.
+          Explore real-time internship opportunities cross-referenced with your parsed resume and skill profile.
         </p>
       </div>
 
-      {/* "My Applications" Mini Bar (If any applied) */}
+      {/* "My Applications" Mini Bar */}
       {state.myApplications?.length > 0 && (
         <div className="glass-card rounded-2xl p-4 border border-[#7C5CFC]/30 bg-[#7C5CFC]/10 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-white uppercase tracking-wider flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>My Applications ({state.myApplications.length})</span>
+              <span>Active Applications ({state.myApplications.length})</span>
             </span>
           </div>
           <div className="flex flex-wrap gap-3 pt-1">
@@ -139,101 +257,123 @@ export default function Internships() {
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="w-full bg-[#1E1B3A] text-white text-xs font-semibold p-2.5 rounded-xl border border-white/15 focus:outline-none"
           >
-            <option value="All">All Role Categories</option>
+            <option value="All">All Categories</option>
             <option value="frontend">Frontend Developer</option>
             <option value="backend">Backend Engineer</option>
             <option value="data-analyst">Data Analyst</option>
             <option value="product-manager">Product Manager</option>
             <option value="ml-engineer">ML Engineer</option>
+            <option value="software-engineer">Software Engineer</option>
           </select>
         </div>
 
       </div>
 
-      {/* Internship Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredListings.map((internship) => {
-          const logoUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(internship.company)}`;
-          const isApplied = state.myApplications?.some(a => a.internshipId === internship.id);
+      {/* Loading State */}
+      {isLoadingJobs ? (
+        <Skeleton title="Searching Live Internships..." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredListings.map((internship) => {
+            const logoUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(internship.company)}`;
+            const isApplied = state.myApplications?.some(a => a.internshipId === internship.id);
 
-          return (
-            <div
-              key={internship.id}
-              className="glass-card glass-card-hover p-6 rounded-3xl border border-white/10 flex flex-col justify-between space-y-4 group"
-            >
-              <div className="space-y-4">
-                
-                {/* Header Row */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <img 
-                      src={logoUrl} 
-                      alt={internship.company}
-                      className="w-11 h-11 rounded-xl bg-white/10 p-1 border border-white/10 shrink-0" 
-                    />
-                    <div>
-                      <h3 className="font-bold text-white text-sm group-hover:text-rose-300 transition-colors">
-                        {internship.title}
-                      </h3>
-                      <p className="text-xs text-slate-400">{internship.company}</p>
+            return (
+              <div
+                key={internship.id}
+                className="glass-card glass-card-hover p-6 rounded-3xl border border-white/10 flex flex-col justify-between space-y-4 group"
+              >
+                <div className="space-y-4">
+                  
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <img 
+                        src={logoUrl} 
+                        alt={internship.company}
+                        className="w-11 h-11 rounded-xl bg-white/10 p-1 border border-white/10 shrink-0" 
+                      />
+                      <div>
+                        <h3 className="font-bold text-white text-sm group-hover:text-rose-300 transition-colors">
+                          {internship.title}
+                        </h3>
+                        <p className="text-xs text-slate-400">{internship.company}</p>
+                      </div>
+                    </div>
+
+                    {/* Match Percentage Badge */}
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-extrabold text-[11px] shrink-0">
+                      {internship.matchPercentage}% Match
+                    </span>
+                  </div>
+
+                  {/* Details Badges */}
+                  <div className="flex flex-wrap gap-2 text-[10px] text-slate-300">
+                    <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
+                      <MapPin className="w-3 h-3 text-cyan-400" />
+                      <span>{internship.location}</span>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
+                      <DollarSign className="w-3 h-3 text-emerald-400" />
+                      <span>{internship.stipend}</span>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
+                      <Calendar className="w-3 h-3 text-amber-400" />
+                      <span>{internship.duration}</span>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
+                      <Clock className="w-3 h-3 text-rose-400" />
+                      <span>{internship.applyDeadline}</span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
+                    {internship.description}
+                  </p>
+
+                  {/* Match Reason Explainability */}
+                  <div className="text-[11px] text-emerald-400 bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 leading-relaxed">
+                    💡 {internship.matchExplanation}
+                  </div>
+
+                  {/* Detected vs Missing Skills Tags */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Skills Analysis:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {internship.matchedSkills?.slice(0, 4).map((skill) => (
+                        <span key={skill} className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold">
+                          ✓ {skill}
+                        </span>
+                      ))}
+                      {internship.missingSkills?.slice(0, 4).map((skill) => (
+                        <span key={skill} className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[9px] font-bold">
+                          ✗ {skill}
+                        </span>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Match Percentage Badge */}
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-extrabold text-[11px] shrink-0">
-                    {internship.matchPercentage}% Match
-                  </span>
                 </div>
 
-                {/* Details Badges */}
-                <div className="flex flex-wrap gap-2 text-[11px] text-slate-300">
-                  <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
-                    <MapPin className="w-3 h-3 text-cyan-400" />
-                    <span>{internship.location}</span>
-                  </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 flex items-center space-x-1">
-                    <DollarSign className="w-3 h-3 text-emerald-400" />
-                    <span>{internship.stipend}</span>
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
-                  {internship.description}
-                </p>
-
-                {/* Skills Tags */}
-                <div className="flex flex-wrap gap-1.5">
-                  {internship.skills.map((skill) => (
-                    <span key={skill} className="px-2 py-0.5 rounded-md bg-[#7C5CFC]/15 text-[#22D3EE] text-[10px] font-semibold">
-                      {skill}
-                    </span>
-                  ))}
+                {/* Action Button */}
+                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500">{internship.postedDate}</span>
+                  
+                  <button
+                    onClick={() => setSelectedInternship(internship)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold gradient-bg-accent text-white hover:scale-105 shadow-md shadow-[#7C5CFC]/30 cursor-pointer"
+                  >
+                    {isApplied ? 'Applied ✓' : 'View Details'}
+                  </button>
                 </div>
 
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Action Button */}
-              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                <span className="text-[10px] text-slate-500">{internship.postedDate}</span>
-                
-                <button
-                  onClick={() => setSelectedInternship(internship)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    isApplied
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'gradient-bg-accent text-white hover:scale-105 shadow-md shadow-[#7C5CFC]/30'
-                  }`}
-                >
-                  {isApplied ? 'Applied' : 'View & Apply'}
-                </button>
-              </div>
-
-            </div>
-          );
-        })}
-      </div>
-
-      {/* DETAIL & APPLICATION MODAL */}
+      {/* DETAIL MODAL WITH DIRECT OFFICIAL LINK */}
       {selectedInternship && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="glass-card rounded-3xl p-8 border border-white/15 max-w-xl w-full space-y-6 animate-in fade-in zoom-in duration-200">
@@ -270,61 +410,21 @@ export default function Internships() {
               </ul>
             </div>
 
-            {/* Mock Application Form */}
-            {showApplyModal ? (
-              <form onSubmit={handleApplySubmit} className="space-y-4 pt-4 border-t border-white/10">
-                <h4 className="font-bold text-white text-xs">Submit Application</h4>
-                <div className="space-y-2">
-                  <label className="text-[11px] text-slate-300 font-semibold">Applicant Full Name:</label>
-                  <input
-                    type="text"
-                    value={applicantName}
-                    onChange={(e) => setApplicantName(e.target.value)}
-                    required
-                    className="w-full glass-input p-2.5 rounded-xl text-xs focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] text-slate-300 font-semibold">Short Note to Recruiter:</label>
-                  <textarea
-                    value={applicantNote}
-                    onChange={(e) => setApplicantNote(e.target.value)}
-                    className="w-full glass-input p-2.5 rounded-xl text-xs h-20 resize-none focus:outline-none"
-                  />
-                </div>
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowApplyModal(false)}
-                    className="px-4 py-2 rounded-xl bg-white/10 text-xs font-semibold text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg"
-                  >
-                    Confirm & Submit Application
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="pt-4 border-t border-white/10 flex justify-end space-x-3">
-                <button
-                  onClick={() => setSelectedInternship(null)}
-                  className="px-4 py-2 rounded-xl bg-white/10 text-xs font-semibold text-white"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => setShowApplyModal(true)}
-                  className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg flex items-center space-x-2"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Apply Now</span>
-                </button>
-              </div>
-            )}
+            <div className="pt-4 border-t border-white/10 flex justify-end space-x-3">
+              <button
+                onClick={() => setSelectedInternship(null)}
+                className="px-4 py-2 rounded-xl bg-white/10 text-xs font-semibold text-white"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => handleApplyClick(selectedInternship)}
+                className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg flex items-center space-x-2"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Apply Externally (New Tab)</span>
+              </button>
+            </div>
 
           </div>
         </div>

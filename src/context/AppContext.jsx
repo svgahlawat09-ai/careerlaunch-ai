@@ -64,12 +64,19 @@ const getInitialState = () => {
         status: 'Under Review'
       }
     ],
-    toasts: []
+    toasts: [],
+    apiKey: ''
   };
 };
 
 function appReducer(state, action) {
   switch (action.type) {
+    case 'SET_API_KEY':
+      return {
+        ...state,
+        apiKey: action.payload
+      };
+
     case 'UPDATE_USER':
       return {
         ...state,

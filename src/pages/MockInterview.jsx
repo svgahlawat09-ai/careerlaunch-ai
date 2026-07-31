@@ -16,7 +16,12 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { QUESTION_BANK, TARGET_ROLES } from '../data/mockData';
-import { evaluateInterviewAnswer } from '../lib/aiEngine';
+import { 
+  evaluateInterviewAnswer, 
+  generateAdaptiveQuestionsLocal, 
+  generateAdaptiveQuestionsGemini, 
+  evaluateAnswerGemini 
+} from '../lib/aiEngine';
 import Skeleton from '../components/Skeleton';
 
 export default function MockInterview() {
@@ -31,73 +36,132 @@ export default function MockInterview() {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isGeneratingQs, setIsGeneratingQs] = useState(false);
+  const [questions, setQuestions] = useState([]);
   const [chatLog, setChatLog] = useState([]); // [{ sender: 'ai'|'user', text, eval }]
   const [sessionResults, setSessionResults] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  // Retrieve current active question bank
-  const activeQuestions = QUESTION_BANK[selectedRole]?.[selectedDifficulty] || QUESTION_BANK['frontend']['beginner'];
+  const startInterviewSession = async () => {
+    setIsGeneratingQs(true);
+    addToast('Analyzing resume & generating questions...', 'info');
 
-  const startInterviewSession = () => {
-    setIsSessionActive(true);
-    setCurrentQuestionIdx(0);
-    setSessionResults(null);
-    const firstQ = activeQuestions[0];
-    setChatLog([
-      {
-        sender: 'ai',
-        text: `Welcome to your AI Mock Interview for ${TARGET_ROLES[selectedRole]?.title || selectedRole} (${selectedDifficulty.toUpperCase()} level). Let's begin with Question 1:\n\n"${firstQ.question}"`
+    try {
+      let qList = [];
+      if (state.apiKey && state.resumeText) {
+        qList = await generateAdaptiveQuestionsGemini(state.apiKey, state.resumeText, selectedRole, selectedDifficulty);
+      } else {
+        qList = generateAdaptiveQuestionsLocal(state.resumeText || '', selectedRole, selectedDifficulty);
       }
-    ]);
-    addToast('Interview Session Started! Good luck.', 'info');
+      setQuestions(qList);
+      setIsSessionActive(true);
+      setCurrentQuestionIdx(0);
+      setSessionResults(null);
+      setChatLog([
+        {
+          sender: 'ai',
+          text: `Welcome to your AI Mock Interview for ${TARGET_ROLES[selectedRole]?.title || selectedRole} (${selectedDifficulty.toUpperCase()} level). Let's begin with Question 1:\n\n"${qList[0].question}"`
+        }
+      ]);
+      addToast('Adaptive Interview Started!', 'success');
+    } catch (err) {
+      console.error(err);
+      const fallbackQs = generateAdaptiveQuestionsLocal(state.resumeText || '', selectedRole, selectedDifficulty);
+      setQuestions(fallbackQs);
+      setIsSessionActive(true);
+      setCurrentQuestionIdx(0);
+      setSessionResults(null);
+      setChatLog([
+        {
+          sender: 'ai',
+          text: `Welcome. Let's begin with Question 1:\n\n"${fallbackQs[0].question}"`
+        }
+      ]);
+      addToast('Started with standard questions.', 'info');
+    } finally {
+      setIsGeneratingQs(false);
+    }
   };
 
   const handleSendAnswer = () => {
     if (!userAnswer.trim() || isAiThinking) return;
 
-    const currentQ = activeQuestions[currentQuestionIdx];
+    const currentQ = questions[currentQuestionIdx];
     const answerText = userAnswer;
     setUserAnswer('');
 
-    // Append user message
     const updatedLog = [...chatLog, { sender: 'user', text: answerText }];
     setChatLog(updatedLog);
     setIsAiThinking(true);
 
-    // Simulate AI processing delay (1.8s)
-    setTimeout(() => {
-      const evalResult = evaluateInterviewAnswer(answerText, currentQ);
-      
-      const aiResponseMsg = {
-        sender: 'ai',
-        text: `Feedback (Score: ${evalResult.score}/10): ${evalResult.feedback}\n\n💡 Tip: ${evalResult.tip}`,
-        eval: evalResult
-      };
+    const runEvaluation = async () => {
+      try {
+        let evalResult;
+        if (state.apiKey) {
+          evalResult = await evaluateAnswerGemini(state.apiKey, currentQ.question, answerText, currentQ.keywords || []);
+        } else {
+          evalResult = evaluateInterviewAnswer(answerText, currentQ);
+        }
 
-      const newLogWithAi = [...updatedLog, aiResponseMsg];
-      setChatLog(newLogWithAi);
-      setIsAiThinking(false);
+        const aiResponseMsg = {
+          sender: 'ai',
+          text: `Score: ${evalResult.score}/10\n\n🎯 Technical Accuracy:\n${evalResult.technicalAccuracy || 'Analyzed'}\n\n💪 Strengths:\n${evalResult.strengths}\n\n⚠️ Weaknesses:\n${evalResult.weaknesses}\n\n🔄 STAR Format Detected: ${evalResult.starDetected ? 'Yes ✓' : 'No ✗'}\n\n💡 Tip: ${evalResult.tip}\n\nGeneral Feedback: ${evalResult.feedback}`,
+          eval: evalResult
+        };
 
-      // Check if more questions exist
-      if (currentQuestionIdx + 1 < activeQuestions.length) {
-        const nextIdx = currentQuestionIdx + 1;
-        setCurrentQuestionIdx(nextIdx);
-        const nextQ = activeQuestions[nextIdx];
-        
-        setTimeout(() => {
-          setChatLog((prev) => [
-            ...prev,
-            {
-              sender: 'ai',
-              text: `Question ${nextIdx + 1} of ${activeQuestions.length}:\n\n"${nextQ.question}"`
-            }
-          ]);
-        }, 800);
-      } else {
-        // Session Complete!
-        finishInterviewSession(newLogWithAi);
+        const newLogWithAi = [...updatedLog, aiResponseMsg];
+        setChatLog(newLogWithAi);
+        setIsAiThinking(false);
+
+        if (currentQuestionIdx + 1 < questions.length) {
+          const nextIdx = currentQuestionIdx + 1;
+          setCurrentQuestionIdx(nextIdx);
+          const nextQ = questions[nextIdx];
+          
+          setTimeout(() => {
+            setChatLog((prev) => [
+              ...prev,
+              {
+                sender: 'ai',
+                text: `Question ${nextIdx + 1} of ${questions.length}:\n\n"${nextQ.question}"`
+              }
+            ]);
+          }, 800);
+        } else {
+          finishInterviewSession(newLogWithAi);
+        }
+      } catch (err) {
+        console.error(err);
+        const evalResult = evaluateInterviewAnswer(answerText, currentQ);
+        const aiResponseMsg = {
+          sender: 'ai',
+          text: `[Local Evaluation] Score: ${evalResult.score}/10\n\n💪 Strengths:\n${evalResult.strengths}\n\n⚠️ Weaknesses:\n${evalResult.weaknesses}\n\n💡 Tip: ${evalResult.tip}\n\nGeneral Feedback: ${evalResult.feedback}`,
+          eval: evalResult
+        };
+        const newLogWithAi = [...updatedLog, aiResponseMsg];
+        setChatLog(newLogWithAi);
+        setIsAiThinking(false);
+
+        if (currentQuestionIdx + 1 < questions.length) {
+          const nextIdx = currentQuestionIdx + 1;
+          setCurrentQuestionIdx(nextIdx);
+          const nextQ = questions[nextIdx];
+          setTimeout(() => {
+            setChatLog((prev) => [
+              ...prev,
+              {
+                sender: 'ai',
+                text: `Question ${nextIdx + 1} of ${questions.length}:\n\n"${nextQ.question}"`
+              }
+            ]);
+          }, 800);
+        } else {
+          finishInterviewSession(newLogWithAi);
+        }
       }
-    }, 1800);
+    };
+
+    runEvaluation();
   };
 
   const finishInterviewSession = (finalLog) => {
@@ -111,7 +175,7 @@ export default function MockInterview() {
       difficulty: selectedDifficulty,
       date: new Date().toISOString().split('T')[0],
       overallScore: avgScore,
-      totalQuestions: activeQuestions.length,
+      totalQuestions: questions.length,
       chatLog: finalLog
     };
 
@@ -182,65 +246,80 @@ export default function MockInterview() {
 
       {/* SETUP VIEW (Before starting interview) */}
       {!isSessionActive && !sessionResults && (
-        <div className="glass-card rounded-3xl p-8 border border-white/10 max-w-3xl mx-auto space-y-8">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl gradient-bg-accent mx-auto flex items-center justify-center shadow-lg shadow-[#7C5CFC]/30">
-              <Bot className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-extrabold text-white">Configure Your Mock Interview</h2>
-            <p className="text-xs text-slate-400">Select your focus role track and difficulty level to begin.</p>
+        isGeneratingQs ? (
+          <div className="max-w-3xl mx-auto">
+            <Skeleton title="Generating Adaptive Interview Questions..." />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
-            {/* Role Track Selector */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">Select Target Role Track:</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full bg-[#1E1B3A] text-white text-xs font-semibold p-3 rounded-xl border border-white/20 focus:outline-none focus:border-[#7C5CFC]"
-              >
-                <option value="frontend">Frontend Developer</option>
-                <option value="backend">Backend Engineer</option>
-                <option value="data-analyst">Data Analyst</option>
-                <option value="product-manager">Product Manager</option>
-                <option value="hr-behavioral">HR & Behavioral Interview</option>
-              </select>
-            </div>
-
-            {/* Difficulty Selector */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">Select Difficulty Level:</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['beginner', 'intermediate', 'advanced'].map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setSelectedDifficulty(lvl)}
-                    className={`py-2.5 rounded-xl text-xs font-semibold capitalize border transition-all ${
-                      selectedDifficulty === lvl
-                        ? 'bg-[#7C5CFC] text-white border-[#7C5CFC] shadow-md'
-                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                    }`}
-                  >
-                    {lvl}
-                  </button>
-                ))}
+        ) : (
+          <div className="glass-card rounded-3xl p-8 border border-white/10 max-w-3xl mx-auto space-y-8">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 rounded-2xl gradient-bg-accent mx-auto flex items-center justify-center shadow-lg shadow-[#7C5CFC]/30">
+                <Bot className="w-8 h-8 text-white" />
               </div>
+              <h2 className="text-2xl font-extrabold text-white">Configure Your Mock Interview</h2>
+              <p className="text-xs text-slate-400">Select your focus role track and difficulty level to begin.</p>
+              {state.resumeText ? (
+                <p className="text-[11px] text-emerald-400 font-semibold mt-2">
+                  ✓ Extracted resume detected! Questions will be tailored to your projects & experience.
+                </p>
+              ) : (
+                <p className="text-[11px] text-cyan-300 font-semibold mt-2">
+                  💡 Tip: Upload a resume on the Resume Checker page to generate customized project questions.
+                </p>
+              )}
             </div>
 
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              
+              {/* Role Track Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">Select Target Role Track:</label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full bg-[#1E1B3A] text-white text-xs font-semibold p-3 rounded-xl border border-white/20 focus:outline-none focus:border-[#7C5CFC]"
+                >
+                  <option value="frontend">Frontend Developer</option>
+                  <option value="backend">Backend Engineer</option>
+                  <option value="data-analyst">Data Analyst</option>
+                  <option value="product-manager">Product Manager</option>
+                  <option value="hr-behavioral">HR & Behavioral Interview</option>
+                </select>
+              </div>
 
-          <div className="pt-4 text-center">
-            <button
-              onClick={startInterviewSession}
-              className="w-full sm:w-auto px-10 py-4 rounded-xl gradient-bg-accent font-semibold text-white shadow-xl shadow-[#7C5CFC]/40 hover:scale-105 transition-transform flex items-center justify-center space-x-2 mx-auto"
-            >
-              <span>Start Interactive Interview</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
+              {/* Difficulty Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">Select Difficulty Level:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['beginner', 'intermediate', 'advanced'].map((lvl) => (
+                    <button
+                      key={lvl}
+                      onClick={() => setSelectedDifficulty(lvl)}
+                      className={`py-2.5 rounded-xl text-xs font-semibold capitalize border transition-all ${
+                        selectedDifficulty === lvl
+                          ? 'bg-[#7C5CFC] text-white border-[#7C5CFC] shadow-md'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            <div className="pt-4 text-center">
+              <button
+                onClick={startInterviewSession}
+                className="w-full sm:w-auto px-10 py-4 rounded-xl gradient-bg-accent font-semibold text-white shadow-xl shadow-[#7C5CFC]/40 hover:scale-105 transition-transform flex items-center justify-center space-x-2 mx-auto"
+              >
+                <span>Start Interactive Interview</span>
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-        </div>
+        )
       )}
 
       {/* ACTIVE INTERVIEW CHAT VIEW */}
