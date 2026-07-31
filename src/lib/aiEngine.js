@@ -390,7 +390,12 @@ export async function callGeminiAPI(apiKey, prompt, systemInstruction = '') {
   const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini');
-  return JSON.parse(text);
+
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '');
+  }
+  return JSON.parse(cleaned.trim());
 }
 
 // Generate interview questions using Gemini

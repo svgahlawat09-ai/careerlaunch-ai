@@ -336,7 +336,7 @@ export default function MockInterview() {
             </div>
             <div className="flex items-center space-x-4 text-xs">
               <span className="text-slate-400">
-                Question <strong className="text-white">{currentQuestionIdx + 1}</strong> of {activeQuestions.length}
+                Question <strong className="text-white">{currentQuestionIdx + 1}</strong> of {questions.length}
               </span>
               <button 
                 onClick={() => setIsSessionActive(false)}
