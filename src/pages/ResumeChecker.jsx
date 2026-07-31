@@ -15,28 +15,53 @@ import {
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { jsPDF } from 'jspdf';
-import * as pdfjsLib from 'pdfjs-dist';
 import { useApp } from '../context/AppContext';
 import { TARGET_ROLES, SAMPLE_RESUME_TEXT } from '../data/mockData';
 import { analyzeResume, analyzeResumeGemini } from '../lib/aiEngine';
 import Skeleton from '../components/Skeleton';
 
-// Setup pdfjs worker path
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '5.6.205'}/build/pdf.worker.min.mjs`;
-
-// Helper function to extract text from a PDF file
+// Helper function to extract text from a PDF file dynamically via CDN (solves Vite bundler & worker errors)
 const extractPdfText = async (file) => {
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
-  const pdf = await loadingTask.promise;
-  let text = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => item.str).join(' ');
-    text += pageText + '\n';
-  }
-  return text;
+  return new Promise((resolve, reject) => {
+    // If already loaded, extract immediately
+    const pdfjs = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+    if (pdfjs) {
+      runExtraction(pdfjs);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      const loadedPdfjs = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+      if (loadedPdfjs) {
+        loadedPdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        runExtraction(loadedPdfjs);
+      } else {
+        reject(new Error('Failed to access PDF.js library after load.'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load PDF.js CDN script.'));
+    document.head.appendChild(script);
+
+    async function runExtraction(pdfEngine) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfEngine.getDocument({ data: new Uint8Array(arrayBuffer) });
+        const pdf = await loadingTask.promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          text += pageText + '\n';
+        }
+        resolve(text);
+      } catch (err) {
+        reject(err);
+      }
+    }
+  });
 };
 
 export default function ResumeChecker() {

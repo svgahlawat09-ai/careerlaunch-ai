@@ -97,40 +97,55 @@ export default function Internships() {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [selectedInternship, setSelectedInternship] = useState(null);
 
-  // Fetch live jobs on load
+  // Fetch live jobs on load with concurrent requests and a 3-second timeout limit
   const fetchLiveJobs = async () => {
     setIsLoadingJobs(true);
     let allFetchedJobs = [];
-    
-    // 1. RemoteOK API
-    try {
-      const response = await fetch('https://remoteok.com/api');
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 1) {
-          const remoteOkJobs = data.slice(1).map(job => mapRemoteOKJob(job));
-          allFetchedJobs = [...allFetchedJobs, ...remoteOkJobs];
+
+    const fetchWithTimeout = (url, timeout = 3000) => {
+      return Promise.race([
+        fetch(url),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
+      ]);
+    };
+
+    const remoteOKPromise = fetchWithTimeout('https://remoteok.com/api', 3000)
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 1) {
+            return data.slice(1).map(job => mapRemoteOKJob(job));
+          }
         }
-      }
+        return [];
+      })
+      .catch((e) => {
+        console.warn("RemoteOK API failed or timed out, skipping:", e);
+        return [];
+      });
+
+    const arbeitnowPromise = fetchWithTimeout('https://www.arbeitnow.com/api/job-board-api', 3000)
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.data)) {
+            return json.data.map(job => mapArbeitnowJob(job));
+          }
+        }
+        return [];
+      })
+      .catch((e) => {
+        console.warn("Arbeitnow API failed or timed out, skipping:", e);
+        return [];
+      });
+
+    try {
+      const [remoteOKJobs, arbeitnowJobs] = await Promise.all([remoteOKPromise, arbeitnowPromise]);
+      allFetchedJobs = [...remoteOKJobs, ...arbeitnowJobs];
     } catch (e) {
-      console.warn("RemoteOK API failed or blocked by CORS, skipping:", e);
+      console.warn("Concurrent fetches failed:", e);
     }
 
-    // 2. Arbeitnow API
-    try {
-      const response = await fetch('https://www.arbeitnow.com/api/job-board-api');
-      if (response.ok) {
-        const json = await response.json();
-        if (json && Array.isArray(json.data)) {
-          const arbeitnowJobs = json.data.map(job => mapArbeitnowJob(job));
-          allFetchedJobs = [...allFetchedJobs, ...arbeitnowJobs];
-        }
-      }
-    } catch (e) {
-      console.warn("Arbeitnow API failed, skipping:", e);
-    }
-
-    // Fallback if all APIs fail or are empty
     if (allFetchedJobs.length === 0) {
       allFetchedJobs = MOCK_INTERNSHIPS.map(item => ({
         ...item,
