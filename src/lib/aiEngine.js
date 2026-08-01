@@ -303,3 +303,113 @@ export function matchInternships(userSkillsList = [], targetRoleKey = 'frontend'
     };
   }).sort((a, b) => b.matchPercentage - a.matchPercentage);
 }
+
+// Gemini API integration helper
+export async function callGeminiAPI(apiKey, prompt, systemInstruction = '') {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt }]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json'
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from Gemini');
+
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '');
+  }
+  return JSON.parse(cleaned.trim());
+}
+
+// Generate interview questions using Gemini
+export async function generateAdaptiveQuestionsGemini(apiKey, resumeText, roleKey, difficulty) {
+  const roleTitle = TARGET_ROLES[roleKey]?.title || roleKey;
+  const systemInstruction = `You are a professional technical recruiter conducting a mock interview.
+Generate exactly 3 interview questions based on the candidate's resume, job role, and difficulty level.
+Return a JSON array of exactly 3 objects.
+Each object must have the following fields:
+- id: a unique string like "q-1", "q-2"
+- question: the question text (personalized to candidate projects/skills if available)
+- keywords: array of expected terms/technologies to search for in answer
+- tips: helpful hint for answering this question.`;
+
+  const prompt = `Resume Content:
+${resumeText}
+
+Target Job Role: ${roleTitle}
+Difficulty: ${difficulty}`;
+
+  return await callGeminiAPI(apiKey, prompt, systemInstruction);
+}
+
+// Evaluate interview response using Gemini
+export async function evaluateAnswerGemini(apiKey, questionText, answerText, expectedKeywords) {
+  const systemInstruction = `You are a senior tech lead conducting a technical interview.
+Evaluate the candidate's answer using the STAR (Situation, Task, Action, Result) methodology.
+Be critical and constructive. Detail what they explained correctly and what they missed.
+Return a JSON object with:
+- score: number between 1 and 10
+- feedback: a summary text assessment
+- strengths: separate text highlighting strengths in their response
+- weaknesses: separate text highlighting what was missing or incorrect
+- starDetected: boolean indicating if they structured it using the STAR format
+- tip: detailed actionable suggestions for improvement.`;
+
+  const prompt = `Question: ${questionText}
+Expected Terms: ${expectedKeywords.join(', ')}
+Candidate Answer: ${answerText}`;
+
+  return await callGeminiAPI(apiKey, prompt, systemInstruction);
+}
+
+// Analyze resume using Gemini API
+export async function analyzeResumeGemini(apiKey, resumeText, targetRoleKey) {
+  const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
+  const systemInstruction = `You are an advanced ATS (Applicant Tracking System) Analyzer.
+Examine the resume and calculate the weighted ATS score based on:
+1. Skills Match (35%)
+2. Experience Relevance (20%)
+3. Education (10%)
+4. Resume Structure (10%)
+5. Keyword Coverage (15%)
+6. Projects (10%)
+
+For section check, check if these sections are present in the resume structure: contact, summary, experience, education, skills, projects, certifications.
+For keywords, map the candidate's resume against target keywords for the role: ${roleConfig.keywords.join(', ')}. Highlight matched vs missing keywords.
+Return a JSON object containing:
+- overallScore: weighted score between 15 and 98
+- keywordMatchScore: score out of 100
+- formattingScore: score out of 100
+- matchedKeywords: array of matching keywords
+- missingKeywords: array of missing keywords
+- tips: array of actionable recommendations. Each recommendation MUST reference evidence or details found (or confirmed missing) in the resume text.
+- atsBreakdown: object with fields (skillsMatch, experienceRelevance, education, resumeStructure, keywordCoverage, projects). Each field contains:
+    - score: number out of 100
+    - reason: explanation of the score, referencing the resume text.`;
+
+  const prompt = `Resume Text:
+${resumeText}`;
+
+  return await callGeminiAPI(apiKey, prompt, systemInstruction);
+}
+
