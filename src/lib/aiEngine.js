@@ -1,358 +1,237 @@
-import { TARGET_ROLES, QUESTION_BANK } from '../data/mockData';
+import { TARGET_ROLES } from '../data/mockData.js';
 
-// Synonyms map for semantic skill matching
-const SYNONYMS = {
-  'js': ['javascript', 'js', 'es6', 'ecmascript'],
-  'javascript': ['javascript', 'js', 'es6', 'ecmascript'],
-  'react': ['react', 'reactjs', 'react.js', 'frontend react'],
-  'node': ['node', 'node.js', 'nodejs'],
-  'node.js': ['node', 'node.js', 'nodejs'],
-  'express': ['express', 'expressjs', 'express.js'],
-  'expressjs': ['express', 'expressjs', 'express.js'],
-  'tensorflow': ['tensorflow', 'tensorflow framework', 'tf'],
-  'cpp': ['c++', 'cpp', 'c plus plus'],
-  'c++': ['c++', 'cpp', 'c plus plus'],
-  'mongodb': ['mongodb', 'mongo'],
-  'postgres': ['postgresql', 'postgres', 'psql'],
-  'postgresql': ['postgresql', 'postgres', 'psql'],
-  'tailwind': ['tailwind css', 'tailwind', 'tailwindcss'],
-  'next.js': ['next.js', 'nextjs', 'next'],
-  'nextjs': ['next.js', 'nextjs', 'next'],
-  'redux': ['redux', 'redux toolkit', 'rtk'],
-  'typescript': ['typescript', 'ts'],
-  'docker': ['docker', 'containerization'],
-  'aws': ['aws', 'amazon web services'],
-  'python': ['python', 'py'],
-  'scikit-learn': ['scikit-learn', 'sklearn'],
-  'algorithms': ['dsa', 'data structures', 'algorithms'],
-  'a11y': ['accessibility', 'a11y', 'web accessibility'],
-  'html': ['html', 'html5'],
-  'css': ['css', 'css3']
-};
+// Action verbs dictionary for ATS resume scoring
+const ACTION_VERBS = [
+  'built', 'developed', 'created', 'designed', 'architected', 'led', 'spearheaded', 
+  'managed', 'engineered', 'implemented', 'optimized', 'reduced', 'increased', 
+  'achieved', 'conducted', 'collaborated', 'integrated', 'delivered', 'formulated',
+  'automated', 'championed', 'deployed', 'orchestrated', 'streamlined', 'pioneered'
+];
 
-// Check if a skill exists in the resume text using synonym-aware matching
-export function checkSkillPresence(text = '', skillName = '') {
-  const normText = text.toLowerCase();
-  const normSkill = skillName.toLowerCase();
-  
-  let equivalents = [normSkill];
-  for (const [canonical, aliases] of Object.entries(SYNONYMS)) {
-    if (canonical === normSkill || aliases.some(alias => alias.toLowerCase() === normSkill)) {
-      equivalents = Array.from(new Set([canonical, ...aliases]));
-      break;
-    }
-  }
-
-  for (const eq of equivalents) {
-    const escaped = eq.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = (eq.length <= 3) 
-      ? new RegExp(`\\b${escaped}\\b`, 'i') 
-      : new RegExp(`\\b${escaped}\\b|${escaped}`, 'i');
-      
-    if (regex.test(normText)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Parse resume text into distinct logical sections
-export function parseResumeSections(text = '') {
-  const sections = {
-    skills: '',
-    softSkills: '',
-    education: '',
-    experience: '',
-    projects: '',
-    certifications: '',
-    tools: '',
-    summary: ''
-  };
-
-  const lines = text.split('\n');
-  let currentSection = 'summary';
-
-  const headerPatterns = [
-    { key: 'skills', regex: /^(technical skills|skills|technologies|core competencies|competencies|languages)/i },
-    { key: 'softSkills', regex: /^(soft skills|interpersonal skills|personal skills)/i },
-    { key: 'education', regex: /^(education|academic background|university|coursework)/i },
-    { key: 'experience', regex: /^(experience|work history|employment|professional experience|internship|roles)/i },
-    { key: 'projects', regex: /^(projects|academic projects|personal projects|key projects)/i },
-    { key: 'certifications', regex: /^(certifications|licenses|awards|achievements)/i },
-    { key: 'tools', regex: /^(tools|developer tools|databases|software)/i }
-  ];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let matched = false;
-    for (const pat of headerPatterns) {
-      if (pat.regex.test(trimmed)) {
-        currentSection = pat.key;
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) {
-      sections[currentSection] += line + '\n';
-    }
-  }
-
-  return sections;
-}
-
-// Local Resume Analysis Engine using rules and synonyms
+/**
+ * Rule-Based ATS Resume Analyzer Engine
+ * (Simulates AI behavior with deterministic NLP heuristics)
+ */
 export function analyzeResume(text = '', targetRoleKey = 'frontend') {
   const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
-  const sections = parseResumeSections(text);
-  
-  // Clean empty sections check
-  const sectionChecks = {
+  const normalizedText = text.toLowerCase();
+  const words = normalizedText.match(/\b[a-z0-9+#.-]+\b/g) || [];
+  const wordCount = words.length;
+
+  // 1. Section Completeness Check (Regex detection)
+  const sections = {
     contact: /(email|phone|github|linkedin|contact|location|address)/i.test(text),
-    summary: sections.summary.trim().length > 10,
-    experience: sections.experience.trim().length > 15,
-    education: sections.education.trim().length > 15,
-    skills: sections.skills.trim().length > 15,
-    projects: sections.projects.trim().length > 15,
-    certifications: sections.certifications.trim().length > 15 || sections.tools.trim().length > 15
+    summary: /(summary|profile|about me|objective|overview)/i.test(text),
+    experience: /(experience|work history|employment|internship|roles)/i.test(text),
+    education: /(education|university|degree|bachelor|master|gpa|coursework)/i.test(text),
+    skills: /(skills|technologies|tools|languages|competencies)/i.test(text)
   };
 
+  const detectedSectionsCount = Object.values(sections).filter(Boolean).length;
+  const formattingScore = Math.round((detectedSectionsCount / 5) * 100);
+
+  // 2. Target Role Keyword Matching
   const targetKeywords = roleConfig.keywords;
-  const matchedKeywords = [];
+  const matchedKeywordsSet = new Set();
   const missingKeywords = [];
 
   targetKeywords.forEach(kw => {
-    if (checkSkillPresence(text, kw)) {
-      matchedKeywords.push(kw);
+    // Check keyword presence in text
+    const kwRegex = new RegExp(`\\b${kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+    if (kwRegex.test(text)) {
+      matchedKeywordsSet.add(kw);
     } else {
       missingKeywords.push(kw);
     }
   });
 
-  // Calculate weighted criteria:
-  // 1. Skills Match (35%)
-  const skillsMatchScore = Math.round((matchedKeywords.length / Math.max(1, targetKeywords.length)) * 100);
+  const matchedKeywords = Array.from(matchedKeywordsSet);
+  const keywordMatchScore = Math.round((matchedKeywords.length / targetKeywords.length) * 100);
 
-  // 2. Experience Relevance (20%)
-  let expScore = 0;
-  if (sectionChecks.experience) {
-    expScore = 60;
-    const expText = sections.experience.toLowerCase();
-    // check for keywords in experience
-    const matchedExpKw = targetKeywords.filter(kw => expText.includes(kw.toLowerCase()));
-    expScore += Math.min(40, matchedExpKw.length * 10);
-  }
+  // 3. Action Verbs Count
+  const matchedActionVerbs = ACTION_VERBS.filter(verb => 
+    new RegExp(`\\b${verb}\\b`, 'i').test(text)
+  );
+  // Score capped at 10+ action verbs for 100%
+  const actionVerbScore = Math.min(100, Math.round((matchedActionVerbs.length / 8) * 100));
 
-  // 3. Education (10%)
-  const educationScore = sectionChecks.education ? (text.toLowerCase().includes('gpa') || text.toLowerCase().includes('degree') ? 100 : 70) : 0;
+  // 4. Length / Word Count Health
+  let wordCountScore = 100;
+  if (wordCount < 150) wordCountScore = 40;
+  else if (wordCount < 250) wordCountScore = 70;
+  else if (wordCount > 1000) wordCountScore = 80;
 
-  // 4. Resume Structure (10%)
-  const detectedSectionsCount = Object.values(sectionChecks).filter(Boolean).length;
-  const formattingScore = Math.round((detectedSectionsCount / 7) * 100);
-
-  // 5. Keyword Coverage (15%)
-  const keywordMatchScore = skillsMatchScore; 
-
-  // 6. Projects (10%)
-  let projectsScore = 0;
-  if (sectionChecks.projects) {
-    projectsScore = 70;
-    const projText = sections.projects.toLowerCase();
-    const matchedProjKw = targetKeywords.filter(kw => projText.includes(kw.toLowerCase()));
-    projectsScore += Math.min(30, matchedProjKw.length * 10);
-  }
-
-  // Weighted Overall ATS Score
+  // Weighted Overall ATS Score computation (Keywords 40%, Formatting 30%, Action Verbs 20%, Length 10%)
   const overallScore = Math.round(
-    (skillsMatchScore * 0.35) +
-    (expScore * 0.20) +
-    (educationScore * 0.10) +
-    (formattingScore * 0.10) +
-    (keywordMatchScore * 0.15) +
-    (projectsScore * 0.10)
+    (keywordMatchScore * 0.40) +
+    (formattingScore * 0.30) +
+    (actionVerbScore * 0.20) +
+    (wordCountScore * 0.10)
   );
 
-  // Construct explainability details
-  const atsBreakdown = {
-    skillsMatch: {
-      score: skillsMatchScore,
-      reason: `Found ${matchedKeywords.length} of ${targetKeywords.length} skills required for ${roleConfig.title}.`
-    },
-    experienceRelevance: {
-      score: expScore,
-      reason: sectionChecks.experience 
-        ? `Experience section contains ${targetKeywords.filter(kw => sections.experience.toLowerCase().includes(kw.toLowerCase())).length} key target skills.`
-        : "Experience section is not detected in your resume structure."
-    },
-    education: {
-      score: educationScore,
-      reason: sectionChecks.education 
-        ? "Education credentials and coursework detected."
-        : "Education section is missing or too brief."
-    },
-    resumeStructure: {
-      score: formattingScore,
-      reason: `Detected ${detectedSectionsCount} key sections out of 7 required ATS blocks.`
-    },
-    keywordCoverage: {
-      score: keywordMatchScore,
-      reason: `Keywords coverage is aligned at ${keywordMatchScore}% matching synonyms.`
-    },
-    projects: {
-      score: projectsScore,
-      reason: sectionChecks.projects 
-        ? "Projects section found with relevant matching descriptions."
-        : "No distinct projects section detected in the structure."
-    }
-  };
-
-  // Generate actionable tips referencing actual findings
+  // Generate dynamic, actionable improvement tips based on actual findings
   const tips = [];
-  if (!sectionChecks.summary) {
-    tips.push("Your professional summary is absent or too brief. Add a 3-4 sentence profile summary at the top.");
+  if (!sections.summary) {
+    tips.push("Add a compelling 2-3 sentence Professional Summary header highlighting your career goals.");
   }
-  if (!sectionChecks.contact) {
-    tips.push("Contact details (LinkedIn URL, Email, Phone) were not detected at the top of your resume.");
+  if (!sections.contact) {
+    tips.push("Include explicit contact details (LinkedIn URL, GitHub handle, email) at the top of your resume.");
   }
   if (missingKeywords.length > 0) {
-    const topMissing = missingKeywords.slice(0, 3).join(', ');
-    tips.push(`"${topMissing}" is not detected anywhere in your Skills, Projects, or Experience sections. Consider incorporating them.`);
-  } else {
-    tips.push("Excellent keyword coverage! All target skills were identified in your profile.");
+    const topMissing = missingKeywords.slice(0, 4).join(', ');
+    tips.push(`Incorporate key industry skills relevant to ${roleConfig.title}: ${topMissing}.`);
+  }
+  if (matchedActionVerbs.length < 5) {
+    tips.push("Start experience bullet points with strong action verbs (e.g. 'Architected', 'Spearheaded', 'Optimized').");
   }
   if (!/\d+%|\$\d+|\d+\s*users|\d+\s*projects/i.test(text)) {
-    tips.push("Quantify your achievements: add measurable metrics (e.g. 'Improved efficiency by 22%' or 'Managed 4+ projects').");
+    tips.push("Quantify your achievements with measurable results (e.g., 'Improved load speed by 25%' or 'Served 1,000+ users').");
+  }
+  if (wordCount < 250) {
+    tips.push("Your resume appears too brief. Expand on project descriptions and key responsibilities.");
   }
 
   return {
     overallScore: Math.min(98, Math.max(15, overallScore)),
     keywordMatchScore,
     formattingScore,
-    actionVerbScore: 90, // preserved for UI backward compatibility
-    wordCountScore: 100, // preserved for UI backward compatibility
-    totalWords: text.split(/\s+/).length,
-    sectionCheck: sectionChecks,
+    actionVerbScore,
+    wordCountScore,
+    totalWords: wordCount,
+    sectionCheck: sections,
     matchedKeywords,
     missingKeywords,
+    matchedActionVerbs,
     tips,
-    atsBreakdown,
     targetRoleTitle: roleConfig.title
   };
 }
 
-// Adaptive local question generator
-export function generateAdaptiveQuestionsLocal(resumeText = '', role = 'frontend', difficulty = 'beginner') {
-  const standardQuestions = QUESTION_BANK[role]?.[difficulty] || QUESTION_BANK['frontend']['beginner'];
-  
-  // Dynamic project questions
-  const projectNames = [];
-  const lines = resumeText.split('\n');
-  for (const line of lines) {
-    if (line.toLowerCase().includes('project') || line.toLowerCase().includes('built') || line.toLowerCase().includes('developed')) {
-      const match = line.match(/\b([A-Z][a-zA-Z0-9]{2,15}(?:\s+[A-Z][a-zA-Z0-9]{2,15}){0,2})\b/);
-      if (match && !['Project', 'Projects', 'Experience', 'Education', 'Summary', 'Skills', 'TechStart'].includes(match[1])) {
-        projectNames.push(match[1]);
-      }
-    }
-  }
-  const uniqueProjects = Array.from(new Set(projectNames)).slice(0, 2);
-
-  const adaptiveQs = [...standardQuestions];
-
-  if (uniqueProjects.length > 0) {
-    adaptiveQs.unshift({
-      id: `adaptive-proj-1`,
-      question: `Describe the technical challenges and architecture of your project "${uniqueProjects[0]}" mentioned in your resume.`,
-      keywords: ['architecture', 'challenges', 'decisions', 'database', 'frontend', 'learned'],
-      tips: "Explain why you built it, the technical stack chosen, and how you solved a key technical bottleneck."
-    });
-  } else {
-    adaptiveQs.unshift({
-      id: `adaptive-proj-fallback`,
-      question: "Describe the architecture and main technical challenges of a software engineering project mentioned in your resume.",
-      keywords: ['architecture', 'challenges', 'database', 'api', 'design'],
-      tips: "Focus on the database design, frontend-backend flow, and how you resolved bottlenecks."
-    });
-  }
-
-  return adaptiveQs.slice(0, 3);
-}
-
-// Rule-Based Interview Answer Evaluator
+/**
+ * Enhanced Rule-Based Interview Answer Evaluator
+ * Detects ignorance/non-answers ("I don't know"), relevance, keyword coverage,
+ * STAR method usage, and provides model answers & key concepts for learning.
+ */
 export function evaluateInterviewAnswer(answerText = '', questionObj = {}) {
   const normalized = answerText.toLowerCase().trim();
   const words = normalized.match(/\b[a-z0-9'-]+\b/g) || [];
   const wordCount = words.length;
 
-  if (wordCount < 8) {
+  const expectedKeywords = questionObj.keywords || [];
+  const keyConcepts = questionObj.keyConcepts || [];
+  const modelAnswer = questionObj.modelAnswer || "A complete answer should clearly define the core concept, provide structural details, and mention a practical real-world use case.";
+
+  // 1. Explicit Ignorance / Non-Answer Detection
+  const ignoranceRegex = /\b(i\s*don'?t\s*know|idk|no\s*idea|not\s*sure|don'?t\s*know|have\s*no\s*idea|haven'?t\s*learned|never\s*used|skip|pass|n\/?a|no\s*answer|can'?t\s*answer|cannot\s*answer|sorry\s*don'?t\s*know)\b/i;
+  const isIgnorant = ignoranceRegex.test(normalized) || (wordCount <= 3 && !expectedKeywords.some(kw => normalized.includes(kw.toLowerCase())));
+
+  if (isIgnorant) {
     return {
-      score: 3,
-      feedback: "Your response is too brief. Elaborate on your thought process and provide specific details.",
-      strengths: "None identified due to length.",
-      weaknesses: "Answer is too short.",
-      tip: "Use the STAR method (Situation, Task, Action, Result) to structure answers to at least 3-4 sentences.",
+      score: 1,
+      isIgnorant: true,
+      isOffTopic: false,
+      feedback: "It's completely okay to admit when you don't know an answer! Honesty in interviews is valued over guessing wildly. Review the model answer and key concepts below to master this topic for next time:",
+      modelAnswer,
+      keyConcepts,
+      tip: questionObj.tips || "Study the model answer above, note down the key terms, and practice explaining the concept in your own words.",
+      matchedKeywords: [],
+      missingKeywords: expectedKeywords,
       metrics: { wordCount, keywordMatches: 0, starDetected: false }
     };
   }
 
-  const expectedKeywords = questionObj.keywords || [];
+  // 2. Keyword Matching & Missing Keywords Analysis
   const matchedKeywords = expectedKeywords.filter(kw => 
     normalized.includes(kw.toLowerCase())
   );
+  const missingKeywords = expectedKeywords.filter(kw => 
+    !normalized.includes(kw.toLowerCase())
+  );
 
-  // STAR indicator words
-  const starIndicators = ['situation', 'task', 'action', 'result', 'because', 'led to', 'improved', 'learned', 'achieved', 'solved', 'example'];
+  // 3. STAR indicator phrases check
+  const starIndicators = ['situation', 'task', 'action', 'result', 'because', 'led to', 'improved', 'learned', 'achieved', 'solved', 'for instance', 'example', 'in my previous'];
   const starMatches = starIndicators.filter(ind => normalized.includes(ind));
   const starDetected = starMatches.length >= 2;
 
-  // Filler words ratio check
-  const fillerWords = ['like', 'um', 'uh', 'you know', 'basically', 'actually', 'sort of'];
+  // 4. Filler words ratio check
+  const fillerWords = ['like', 'um', 'uh', 'you know', 'basically', 'actually', 'sort of', 'kind of', 'stuff'];
   const fillerCount = fillerWords.reduce((acc, filler) => {
     const matches = normalized.match(new RegExp(`\\b${filler}\\b`, 'gi'));
     return acc + (matches ? matches.length : 0);
   }, 0);
 
-  let score = 5;
-  if (wordCount >= 40 && wordCount <= 160) score += 2;
-  else if (wordCount > 25) score += 1;
+  // 5. Off-Topic Check (Long answer with ZERO matched keywords)
+  const kwRatio = expectedKeywords.length > 0 ? (matchedKeywords.length / expectedKeywords.length) : 0.5;
+  const isOffTopic = wordCount >= 10 && matchedKeywords.length === 0 && expectedKeywords.length > 0;
 
-  if (expectedKeywords.length > 0) {
-    const kwRatio = matchedKeywords.length / expectedKeywords.length;
-    score += Math.round(kwRatio * 3);
-  } else {
-    score += 1;
+  if (isOffTopic) {
+    return {
+      score: 2,
+      isIgnorant: false,
+      isOffTopic: true,
+      feedback: "Your answer had reasonable length, but it missed the core technical concepts and terms required for this question. Make sure to directly address the key topics.",
+      modelAnswer,
+      keyConcepts,
+      tip: expectedKeywords.length > 0 ? `Be sure to incorporate fundamental concepts like '${expectedKeywords.slice(0, 3).join("', '")}'.` : "Focus on addressing the question directly.",
+      matchedKeywords: [],
+      missingKeywords: expectedKeywords,
+      metrics: { wordCount, keywordMatches: 0, starDetected }
+    };
   }
 
+  // 6. Score Calculation for Genuine Attempt
+  let score = 2; // Baseline
+
+  // Primary weight: Keyword coverage (0 to 5 points)
+  if (expectedKeywords.length > 0) {
+    score += Math.round(kwRatio * 5);
+  } else {
+    score += 3;
+  }
+
+  // Secondary weight: Explanation depth & word count
+  if (wordCount >= 35) score += 2;
+  else if (wordCount >= 18) score += 1;
+
+  // Structure bonus (STAR method)
   if (starDetected) score += 1;
+
+  // Filler word penalty
   if (fillerCount > 3) score -= 1;
 
+  // Final score clamping between 2 and 10
   const finalScore = Math.min(10, Math.max(2, score));
 
-  // Strengths / Weaknesses analysis
-  const strengths = matchedKeywords.length > 0 
-    ? `You correctly referenced key concepts: '${matchedKeywords.slice(0, 3).join("', '")}'.`
-    : "Good attempt at explaining the response flow.";
-  
-  const weaknesses = matchedKeywords.length < expectedKeywords.length
-    ? `You missed important details about: '${expectedKeywords.filter(k => !matchedKeywords.includes(k)).slice(0, 2).join("' and '")}'.`
-    : "Could add more technical metrics or performance numbers.";
-
-  let feedback = `Good effort! You touched on relevant core concepts, but there is room for extra clarity.`;
+  // Dynamic feedback construction
+  let feedbackParts = [];
   if (finalScore >= 8) {
-    feedback = `Excellent and structured answer! You clearly demonstrated sound technical understanding and structure.`;
-  } else if (finalScore < 6) {
-    feedback = `Your answer provides a basic start, but lacks depth and specific technical terminology.`;
+    feedbackParts.push("Outstanding response! You clearly articulated the core concepts with strong technical precision.");
+  } else if (finalScore >= 6) {
+    feedbackParts.push("Good effort! You touched on relevant key concepts, but expanding with specific examples will elevate your answer.");
+  } else {
+    feedbackParts.push("Your answer provides a basic start, but lacks technical depth and essential terminology.");
+  }
+
+  if (matchedKeywords.length > 0) {
+    feedbackParts.push(`Great job addressing key terms: '${matchedKeywords.slice(0, 4).join("', '")}'.`);
+  }
+  if (missingKeywords.length > 0 && finalScore < 9) {
+    feedbackParts.push(`To improve, try to also cover: '${missingKeywords.slice(0, 3).join("', '")}'.`);
+  }
+  if (starDetected) {
+    feedbackParts.push("Strong structural storytelling detected!");
   }
 
   return {
     score: finalScore,
-    feedback: feedback,
-    strengths,
-    weaknesses,
-    starDetected,
+    isIgnorant: false,
+    isOffTopic: false,
+    feedback: feedbackParts.join(" "),
+    modelAnswer,
+    keyConcepts,
     tip: questionObj.tips || "Structure technical explanations by defining the concept first, followed by a concrete real-world application example.",
+    matchedKeywords,
+    missingKeywords,
     metrics: {
       wordCount,
       keywordMatches: matchedKeywords.length,
@@ -361,185 +240,9 @@ export function evaluateInterviewAnswer(answerText = '', questionObj = {}) {
   };
 }
 
-// Fetch content from Gemini API in a standard format
-export async function callGeminiAPI(apiKey, prompt, systemInstruction = '') {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt }]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json'
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API Error (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini');
-
-  let cleaned = text.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '');
-  }
-  return JSON.parse(cleaned.trim());
-}
-
-// Generate interview questions using Gemini
-export async function generateAdaptiveQuestionsGemini(apiKey, resumeText, roleKey, difficulty) {
-  const roleTitle = TARGET_ROLES[roleKey]?.title || roleKey;
-  const systemInstruction = `You are a professional technical recruiter conducting a mock interview.
-Generate exactly 3 interview questions based on the candidate's resume, job role, and difficulty level.
-Return a JSON array of exactly 3 objects.
-Each object must have the following fields:
-- id: a unique string like "q-1", "q-2"
-- question: the question text (personalized to candidate projects/skills if available)
-- keywords: array of expected terms/technologies to search for in answer
-- tips: helpful hint for answering this question.`;
-
-  const prompt = `Resume Content:
-${resumeText}
-
-Target Job Role: ${roleTitle}
-Difficulty: ${difficulty}`;
-
-  return await callGeminiAPI(apiKey, prompt, systemInstruction);
-}
-
-// Evaluate interview response using Gemini
-export async function evaluateAnswerGemini(apiKey, questionText, answerText, expectedKeywords) {
-  const systemInstruction = `You are a senior tech lead conducting a technical interview.
-Evaluate the candidate's answer using the STAR (Situation, Task, Action, Result) methodology.
-Be critical and constructive. Detail what they explained correctly and what they missed.
-Return a JSON object with:
-- score: number between 1 and 10
-- feedback: a summary text assessment
-- strengths: separate text highlighting strengths in their response
-- weaknesses: separate text highlighting what was missing or incorrect
-- starDetected: boolean indicating if they structured it using the STAR format
-- tip: detailed actionable suggestions for improvement.`;
-
-  const prompt = `Question: ${questionText}
-Expected Terms: ${expectedKeywords.join(', ')}
-Candidate Answer: ${answerText}`;
-
-  return await callGeminiAPI(apiKey, prompt, systemInstruction);
-}
-
-// Analyze resume using Gemini API
-export async function analyzeResumeGemini(apiKey, resumeText, targetRoleKey) {
-  const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
-  const systemInstruction = `You are an advanced ATS (Applicant Tracking System) Analyzer.
-Examine the resume and calculate the weighted ATS score based on:
-1. Skills Match (35%)
-2. Experience Relevance (20%)
-3. Education (10%)
-4. Resume Structure (10%)
-5. Keyword Coverage (15%)
-6. Projects (10%)
-
-For section check, check if these sections are present in the resume structure: contact, summary, experience, education, skills, projects, certifications.
-For keywords, map the candidate's resume against target keywords for the role: ${roleConfig.keywords.join(', ')}. Highlight matched vs missing keywords.
-Return a JSON object containing:
-- overallScore: weighted score between 15 and 98
-- keywordMatchScore: score out of 100
-- formattingScore: score out of 100
-- matchedKeywords: array of matching keywords
-- missingKeywords: array of missing keywords
-- tips: array of actionable recommendations. Each recommendation MUST reference evidence or details found (or confirmed missing) in the resume text.
-- atsBreakdown: object with fields (skillsMatch, experienceRelevance, education, resumeStructure, keywordCoverage, projects). Each field contains:
-    - score: number out of 100
-    - reason: explanation of the score, referencing the resume text.`;
-
-  const prompt = `Resume Text:
-${resumeText}`;
-
-  return await callGeminiAPI(apiKey, prompt, systemInstruction);
-}
-
-// Calculate match percentage and details between a resume and a job listing
-export function calculateInternshipMatch(resumeText = '', internship, stateUserSkills = {}) {
-  const text = resumeText || '';
-  const requiredSkills = internship.skills || [];
-  
-  let matchedCount = 0;
-  const matchedList = [];
-  const missingList = [];
-  
-  requiredSkills.forEach(skill => {
-    if (checkSkillPresence(text, skill)) {
-      matchedCount++;
-      matchedList.push(skill);
-    } else {
-      // Fallback: check profile slider level
-      const userRating = stateUserSkills[skill];
-      if (userRating !== undefined && userRating >= 3.0) {
-        matchedCount++;
-        matchedList.push(skill);
-      } else {
-        missingList.push(skill);
-      }
-    }
-  });
-
-  const skillsMatchRatio = requiredSkills.length > 0 ? matchedCount / requiredSkills.length : 0.8;
-  
-  // Calculate base score
-  let score = 50 + Math.round(skillsMatchRatio * 30);
-  
-  // Additional points for sections
-  const hasExp = /(experience|internship|work)/i.test(text);
-  if (hasExp) score += 10;
-  
-  const hasProj = /(project|projects)/i.test(text);
-  if (hasProj) score += 10;
-
-  const matchPercentage = Math.min(99, Math.max(45, score));
-
-  // Determine explanation
-  let explanation = `This role is a solid match for your technical background.`;
-  if (matchedList.includes('React') || matchedList.includes('Node') || matchedList.includes('MongoDB')) {
-    explanation = `Recommended because your MERN projects and javascript skills align with this role.`;
-  } else if (matchedList.length > 2) {
-    explanation = `Recommended because your experience in ${matchedList.slice(0, 3).join(', ')} directly supports this internship's goals.`;
-  }
-
-  return {
-    matchPercentage,
-    matchedList,
-    missingList,
-    explanation
-  };
-}
-
-// Main filter and match runner
-export function matchInternships(resumeText = '', targetRoleKey = 'frontend', internships = [], stateUserSkills = {}) {
-  return internships.map(internship => {
-    const matchData = calculateInternshipMatch(resumeText, internship, stateUserSkills);
-    return {
-      ...internship,
-      matchPercentage: matchData.matchPercentage,
-      matchedSkills: matchData.matchedList,
-      missingSkills: matchData.missingList,
-      matchExplanation: matchData.explanation
-    };
-  }).sort((a, b) => b.matchPercentage - a.matchPercentage);
-}
-
-// Compute Skill Gap diff between user ratings and role benchmark
+/**
+ * Compute Skill Gap diff between user ratings and role benchmark
+ */
 export function computeSkillGap(userSkillsObj = {}, targetRoleKey = 'frontend') {
   const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
   const benchmarks = roleConfig.benchmarkSkills;
@@ -572,4 +275,31 @@ export function computeSkillGap(userSkillsObj = {}, targetRoleKey = 'frontend') 
       reason
     };
   }).sort((a, b) => b.gap - a.gap);
+}
+
+/**
+ * Filter & Match internships based on skill gap and chosen role
+ */
+export function matchInternships(userSkillsList = [], targetRoleKey = 'frontend', internships = []) {
+  const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
+  
+  return internships.map(internship => {
+    let matchScore = 70; // baseline
+    if (internship.roleCategory === targetRoleKey) {
+      matchScore += 15;
+    }
+    
+    // Check overlap with user skills
+    const matchingSkills = internship.skills.filter(s => 
+      userSkillsList.some(userSkill => userSkill.toLowerCase().includes(s.toLowerCase())) ||
+      roleConfig.keywords.some(kw => kw.toLowerCase().includes(s.toLowerCase()))
+    );
+
+    matchScore += Math.min(15, matchingSkills.length * 4);
+
+    return {
+      ...internship,
+      matchPercentage: Math.min(99, Math.max(65, matchScore))
+    };
+  }).sort((a, b) => b.matchPercentage - a.matchPercentage);
 }
