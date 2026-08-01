@@ -12,7 +12,9 @@ import {
   Send, 
   Building2, 
   Filter, 
-  Sparkles 
+  Sparkles,
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MOCK_INTERNSHIPS } from '../data/mockData';
@@ -63,12 +65,21 @@ export default function Internships() {
     e.preventDefault();
     if (!selectedInternship) return;
 
+    handleOfficialApply(selectedInternship);
+  };
+
+  const handleOfficialApply = (item) => {
+    if (!item) return;
+
     dispatch({
       type: 'APPLY_INTERNSHIP',
-      payload: selectedInternship
+      payload: item
     });
 
-    addToast(`Application submitted to ${selectedInternship.company}!`, 'success');
+    const targetUrl = item.applyUrl || 'https://careers.google.com/';
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+    addToast(`Opening ${item.company} official career portal! Application recorded.`, 'success');
     setShowApplyModal(false);
     setSelectedInternship(null);
   };
@@ -250,19 +261,30 @@ export default function Internships() {
               </div>
 
               {/* Action Button */}
-              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+              <div className="pt-4 border-t border-white/5 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-slate-500">{internship.postedDate}</span>
                 
-                <button
-                  onClick={() => setSelectedInternship(internship)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    isApplied
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'gradient-bg-accent text-white hover:scale-105 shadow-md shadow-[#7C5CFC]/30'
-                  }`}
-                >
-                  {isApplied ? 'Applied' : 'View & Apply'}
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleOfficialApply(internship)}
+                    className="px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-all"
+                    title="Apply directly on company's official career portal"
+                  >
+                    <span>Apply ↗</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedInternship(internship)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isApplied
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'gradient-bg-accent text-white hover:scale-105 shadow-md shadow-[#7C5CFC]/30'
+                    }`}
+                  >
+                    {isApplied ? 'Applied' : 'Details'}
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -278,7 +300,7 @@ export default function Internships() {
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
                 <img 
-                  src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedInternship.company)}`} 
+                  src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedInternship.logoSeed || selectedInternship.company)}`} 
                   alt="Logo"
                   className="w-12 h-12 rounded-xl bg-white/10 p-1"
                 />
@@ -295,6 +317,22 @@ export default function Internships() {
               </button>
             </div>
 
+            {/* Official Portal Notice Banner */}
+            <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-200 flex items-center justify-between gap-2">
+              <div className="flex items-center space-x-2 truncate">
+                <Globe className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span className="truncate">Official Career Portal: <strong className="text-white">{selectedInternship.applyUrl || selectedInternship.company}</strong></span>
+              </div>
+              <a 
+                href={selectedInternship.applyUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-[11px] font-bold text-cyan-300 hover:underline shrink-0"
+              >
+                Visit Site ↗
+              </a>
+            </div>
+
             <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
               <h4 className="font-bold text-white uppercase tracking-wider text-[11px]">Role Description</h4>
               <p>{selectedInternship.description}</p>
@@ -307,10 +345,10 @@ export default function Internships() {
               </ul>
             </div>
 
-            {/* Mock Application Form */}
+            {/* Application CTAs */}
             {showApplyModal ? (
               <form onSubmit={handleApplySubmit} className="space-y-4 pt-4 border-t border-white/10">
-                <h4 className="font-bold text-white text-xs">Submit Application</h4>
+                <h4 className="font-bold text-white text-xs">Submit Application Note & Redirect</h4>
                 <div className="space-y-2">
                   <label className="text-[11px] text-slate-300 font-semibold">Applicant Full Name:</label>
                   <input
@@ -339,27 +377,34 @@ export default function Internships() {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg"
+                    className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg flex items-center space-x-2"
                   >
-                    Confirm & Submit Application
+                    <span>Confirm & Launch Career Portal ↗</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="pt-4 border-t border-white/10 flex justify-end space-x-3">
-                <button
-                  onClick={() => setSelectedInternship(null)}
-                  className="px-4 py-2 rounded-xl bg-white/10 text-xs font-semibold text-white"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => setShowApplyModal(true)}
-                  className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg flex items-center space-x-2"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Apply Now</span>
-                </button>
+              <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                <span className="text-xs text-emerald-400 font-semibold">
+                  Stipend: {selectedInternship.stipend}
+                </span>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setSelectedInternship(null)}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-xs font-semibold text-white"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => handleOfficialApply(selectedInternship)}
+                    className="px-6 py-2 rounded-xl gradient-bg-accent text-xs font-semibold text-white shadow-lg flex items-center space-x-2 hover:scale-105 transition-transform"
+                  >
+                    <span>Apply on Official Portal ↗</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )}
 

@@ -653,6 +653,7 @@ export const MOCK_INTERNSHIPS = [
   // Top Indian Companies & Tech Hubs
   {
     id: 'int-in-1',
+    applyUrl: 'https://www.tcs.com/careers',
     title: 'Software Development Engineer Intern (SDE)',
     company: 'Tata Consultancy Services (TCS)',
     logoSeed: 'TCS',
@@ -674,6 +675,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-2',
+    applyUrl: 'https://careers.flipkart.com/',
     title: 'Frontend React Developer Intern',
     company: 'Flipkart',
     logoSeed: 'Flipkart',
@@ -695,6 +697,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-3',
+    applyUrl: 'https://careers.swiggy.com/',
     title: 'Full Stack Web Developer Intern',
     company: 'Swiggy',
     logoSeed: 'Swiggy',
@@ -716,6 +719,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-4',
+    applyUrl: 'https://razorpay.com/careers/',
     title: 'Backend API Engineering Intern',
     company: 'Razorpay',
     logoSeed: 'Razorpay',
@@ -737,6 +741,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-5',
+    applyUrl: 'https://careers.zomato.com/',
     title: 'Data Analyst & Business Insights Intern',
     company: 'Zomato',
     logoSeed: 'Zomato',
@@ -758,6 +763,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-6',
+    applyUrl: 'https://careers.jio.com/',
     title: 'Machine Learning & AI Intern',
     company: 'Reliance Jio',
     logoSeed: 'RelianceJio',
@@ -779,6 +785,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-7',
+    applyUrl: 'https://cred.club/careers',
     title: 'Mobile & React Native Intern',
     company: 'CRED',
     logoSeed: 'CRED',
@@ -800,6 +807,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-8',
+    applyUrl: 'https://www.infosys.com/instep.html',
     title: 'Cloud Systems & DevOps Intern',
     company: 'Infosys',
     logoSeed: 'Infosys',
@@ -821,6 +829,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-9',
+    applyUrl: 'https://www.phonepe.com/careers/',
     title: 'Associate Product Manager (APM) Intern',
     company: 'PhonePe',
     logoSeed: 'PhonePe',
@@ -842,6 +851,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-10',
+    applyUrl: 'https://www.zoho.com/careers/',
     title: 'Software Engineer & Web Developer Intern',
     company: 'Zoho Corporation',
     logoSeed: 'Zoho',
@@ -863,6 +873,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-11',
+    applyUrl: 'https://www.techmahindra.com/en-in/careers/',
     title: 'Backend & Database Systems Intern',
     company: 'Tech Mahindra',
     logoSeed: 'TechMahindra',
@@ -884,6 +895,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-12',
+    applyUrl: 'https://paytm.com/careers',
     title: 'UI/UX & Web Developer Intern',
     company: 'Paytm',
     logoSeed: 'Paytm',
@@ -904,6 +916,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-13',
+    applyUrl: 'https://www.inmobi.com/company/careers/',
     title: 'Data Science & AdTech Analytics Intern',
     company: 'InMobi',
     logoSeed: 'InMobi',
@@ -924,6 +937,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-in-14',
+    applyUrl: 'https://careers.wipro.com/',
     title: 'Full Stack Engineer Intern',
     company: 'Wipro Technologies',
     logoSeed: 'Wipro',
@@ -946,6 +960,7 @@ export const MOCK_INTERNSHIPS = [
   // International / Abroad Internships
   {
     id: 'int-1',
+    applyUrl: 'https://careers.google.com/students/',
     title: 'Frontend React Engineering Intern',
     company: 'Apex Cloud Systems',
     logoSeed: 'ApexCloud',
@@ -968,6 +983,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-2',
+    applyUrl: 'https://careers.microsoft.com/students/us/en',
     title: 'Full Stack Web Developer Intern',
     company: 'Vanguard Innovations',
     logoSeed: 'Vanguard',
@@ -989,6 +1005,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-3',
+    applyUrl: 'https://www.amazon.jobs/en/teams/internships-for-students',
     title: 'Backend API & Infrastructure Intern',
     company: 'Nexus Cyberworks',
     logoSeed: 'NexusCyber',
@@ -1010,6 +1027,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-4',
+    applyUrl: 'https://www.metacareers.com/areas-of-work/students-and-grads/',
     title: 'Data Analyst & Insights Intern',
     company: 'Pulse Analytics Lab',
     logoSeed: 'PulseAnalytics',
@@ -1031,6 +1049,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-5',
+    applyUrl: 'https://www.apple.com/careers/us/students.html',
     title: 'Associate Product Manager Intern',
     company: 'HyperDrive Studio',
     logoSeed: 'HyperDrive',
@@ -1052,6 +1071,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-6',
+    applyUrl: 'https://www.uber.com/us/en/careers/teams/university/',
     title: 'Machine Learning Research Intern',
     company: 'Aether Cognitive AI',
     logoSeed: 'AetherAI',
@@ -1073,6 +1093,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-7',
+    applyUrl: 'https://jobs.netflix.com/work-with-us',
     title: 'Software Development Engineer Intern (SDE)',
     company: 'OmniStack Technologies',
     logoSeed: 'OmniStack',
@@ -1094,6 +1115,7 @@ export const MOCK_INTERNSHIPS = [
   },
   {
     id: 'int-8',
+    applyUrl: 'https://lifeatspotify.com/students',
     title: 'UI/UX & Frontend Developer Intern',
     company: 'PixelCraft Design Labs',
     logoSeed: 'PixelCraft',
