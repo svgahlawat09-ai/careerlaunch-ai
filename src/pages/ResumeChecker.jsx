@@ -49,14 +49,26 @@ const extractPdfText = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfEngine.getDocument({ data: new Uint8Array(arrayBuffer) });
         const pdf = await loadingTask.promise;
-        let text = '';
+        let textLines = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          const pageText = textContent.items.map(item => item.str).join(' ');
-          text += pageText + '\n';
+          let lastY = null;
+          let pageStr = '';
+          textContent.items.forEach(item => {
+            if (!item.str) return;
+            // Detect line break using Y-coordinate transform
+            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 4) {
+              pageStr += '\n';
+            } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n')) {
+              pageStr += ' ';
+            }
+            pageStr += item.str;
+            lastY = item.transform[5];
+          });
+          textLines.push(pageStr);
         }
-        resolve(text);
+        resolve(textLines.join('\n\n'));
       } catch (err) {
         reject(err);
       }

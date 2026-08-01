@@ -5,63 +5,94 @@ const ACTION_VERBS = [
   'built', 'developed', 'created', 'designed', 'architected', 'led', 'spearheaded', 
   'managed', 'engineered', 'implemented', 'optimized', 'reduced', 'increased', 
   'achieved', 'conducted', 'collaborated', 'integrated', 'delivered', 'formulated',
-  'automated', 'championed', 'deployed', 'orchestrated', 'streamlined', 'pioneered'
+  'automated', 'championed', 'deployed', 'orchestrated', 'streamlined', 'pioneered',
+  'conceptualized', 'leveraged', 'organized', 'coordinated', 'participated', 'authored',
+  'researched', 'analyzed', 'curated', 'modeled', 'evaluated', 'transformed'
 ];
+
+/**
+ * Text Sanitizer to clean up PDF/DOCX artifacts, non-breaking spaces, and broken letter spacing
+ */
+export function sanitizeResumeText(rawText = '') {
+  if (!rawText) return '';
+  let text = rawText.replace(/\u00A0/g, ' ');
+  // Clean spaced uppercase headers (e.g. E D U C A T I O N -> EDUCATION)
+  text = text.replace(/\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z]+)\b/g, '$1$2$3$4');
+  text = text.replace(/[ \t]+/g, ' ');
+  return text.trim();
+}
 
 /**
  * Rule-Based ATS Resume Analyzer Engine
  * (Simulates AI behavior with deterministic NLP heuristics)
  */
 export function analyzeResume(text = '', targetRoleKey = 'frontend') {
+  const cleanText = sanitizeResumeText(text);
   const roleConfig = TARGET_ROLES[targetRoleKey] || TARGET_ROLES['frontend'];
-  const normalizedText = text.toLowerCase();
+  const normalizedText = cleanText.toLowerCase();
   const words = normalizedText.match(/\b[a-z0-9+#.-]+\b/g) || [];
   const wordCount = words.length;
 
-  // 1. Section Completeness Check (Regex detection)
+  // 1. Section Completeness Check (Enhanced regex detection supporting student & project-based resumes)
   const sections = {
-    contact: /(email|phone|github|linkedin|contact|location|address)/i.test(text),
-    summary: /(summary|profile|about me|objective|overview)/i.test(text),
-    experience: /(experience|work history|employment|internship|roles)/i.test(text),
-    education: /(education|university|degree|bachelor|master|gpa|coursework)/i.test(text),
-    skills: /(skills|technologies|tools|languages|competencies)/i.test(text)
+    contact: /(email|phone|github|linkedin|contact|location|address|@|\d{10})/i.test(cleanText),
+    summary: /(summary|profile|about|objective|overview|bio|background|undergraduate|student)/i.test(cleanText),
+    experience: /(experience|work|employment|internship|roles|projects|project|achievements|activities|hackathon|contributions|leadership)/i.test(cleanText),
+    education: /(education|university|institute|college|degree|bachelor|master|b\.?tech|m\.?tech|btech|mtech|gpa|cgpa|graduat|academic|school|diploma)/i.test(cleanText),
+    skills: /(skills|technologies|tools|languages|competencies|expertise|proficiencies|stack|technical)/i.test(cleanText)
   };
 
   const detectedSectionsCount = Object.values(sections).filter(Boolean).length;
   const formattingScore = Math.round((detectedSectionsCount / 5) * 100);
 
-  // 2. Target Role Keyword Matching
+  // 2. Target Role Keyword & Technical Skill Matching
   const targetKeywords = roleConfig.keywords;
   const matchedKeywordsSet = new Set();
   const missingKeywords = [];
 
   targetKeywords.forEach(kw => {
-    // Check keyword presence in text
-    const kwRegex = new RegExp(`\\b${kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
-    if (kwRegex.test(text)) {
+    const escapedKw = kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const kwRegex = new RegExp(`(\\b${escapedKw}\\b|${escapedKw})`, 'i');
+    if (kwRegex.test(cleanText)) {
       matchedKeywordsSet.add(kw);
     } else {
       missingKeywords.push(kw);
     }
   });
 
+  // Also extract skills explicitly listed in the candidate's resume
+  const commonSkillTokens = [
+    'python', 'c', 'c++', 'java', 'javascript', 'typescript', 'react', 'html', 'css', 
+    'excel', 'google sheets', 'canva', 'ai', 'prompt engineering', 'data entry', 
+    'internet research', 'sql', 'git', 'tableau', 'power bi', 'figma', 'node.js',
+    'express', 'mongodb', 'postgresql', 'fastapi', 'pytorch', 'tensorflow', 'pandas'
+  ];
+
+  commonSkillTokens.forEach(token => {
+    const escapedToken = token.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    if (new RegExp(`\\b${escapedToken}\\b`, 'i').test(cleanText)) {
+      // Capitalize nicely
+      const formatted = token.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      matchedKeywordsSet.add(formatted);
+    }
+  });
+
   const matchedKeywords = Array.from(matchedKeywordsSet);
-  const keywordMatchScore = Math.round((matchedKeywords.length / targetKeywords.length) * 100);
+  const keywordMatchScore = Math.min(100, Math.max(35, Math.round((matchedKeywords.length / (targetKeywords.length || 1)) * 100)));
 
   // 3. Action Verbs Count
   const matchedActionVerbs = ACTION_VERBS.filter(verb => 
-    new RegExp(`\\b${verb}\\b`, 'i').test(text)
+    new RegExp(`\\b${verb}\\b`, 'i').test(cleanText)
   );
-  // Score capped at 10+ action verbs for 100%
-  const actionVerbScore = Math.min(100, Math.round((matchedActionVerbs.length / 8) * 100));
+  const actionVerbScore = Math.min(100, Math.round((matchedActionVerbs.length / 5) * 100));
 
   // 4. Length / Word Count Health
   let wordCountScore = 100;
-  if (wordCount < 150) wordCountScore = 40;
-  else if (wordCount < 250) wordCountScore = 70;
-  else if (wordCount > 1000) wordCountScore = 80;
+  if (wordCount < 100) wordCountScore = 40;
+  else if (wordCount < 200) wordCountScore = 75;
+  else if (wordCount > 1000) wordCountScore = 85;
 
-  // Weighted Overall ATS Score computation (Keywords 40%, Formatting 30%, Action Verbs 20%, Length 10%)
+  // Weighted Overall ATS Score computation
   const overallScore = Math.round(
     (keywordMatchScore * 0.40) +
     (formattingScore * 0.30) +
@@ -71,28 +102,36 @@ export function analyzeResume(text = '', targetRoleKey = 'frontend') {
 
   // Generate dynamic, actionable improvement tips based on actual findings
   const tips = [];
+  if (sections.education) {
+    tips.push("✅ Education section detected! Your degree and academic background are recognized by ATS.");
+  } else {
+    tips.push("Add an explicit 'EDUCATION' section header with your degree, institution name, and CGPA/graduation year.");
+  }
+
+  if (sections.skills) {
+    tips.push(`✅ ${matchedKeywords.length} key technical & analytical skills successfully identified.`);
+  } else {
+    tips.push("Add a dedicated 'SKILLS' header categorizing your technical languages, tools, and platforms.");
+  }
+
   if (!sections.summary) {
-    tips.push("Add a compelling 2-3 sentence Professional Summary header highlighting your career goals.");
+    tips.push("Add a compelling 2-3 sentence Professional Summary or Profile header highlighting your career goals.");
   }
   if (!sections.contact) {
     tips.push("Include explicit contact details (LinkedIn URL, GitHub handle, email) at the top of your resume.");
   }
+
   if (missingKeywords.length > 0) {
     const topMissing = missingKeywords.slice(0, 4).join(', ');
-    tips.push(`Incorporate key industry skills relevant to ${roleConfig.title}: ${topMissing}.`);
+    tips.push(`To target ${roleConfig.title} positions more strongly, consider adding skills like: ${topMissing}.`);
   }
-  if (matchedActionVerbs.length < 5) {
-    tips.push("Start experience bullet points with strong action verbs (e.g. 'Architected', 'Spearheaded', 'Optimized').");
-  }
-  if (!/\d+%|\$\d+|\d+\s*users|\d+\s*projects/i.test(text)) {
-    tips.push("Quantify your achievements with measurable results (e.g., 'Improved load speed by 25%' or 'Served 1,000+ users').");
-  }
-  if (wordCount < 250) {
-    tips.push("Your resume appears too brief. Expand on project descriptions and key responsibilities.");
+
+  if (!/\d+%|\$\d+|\d+\s*users|\d+\s*projects|cgpa|gpa/i.test(cleanText)) {
+    tips.push("Quantify your achievements with metrics (e.g., 'Maintained 9.3+ CGPA', 'Built 2 web apps', 'Served 1,000+ users').");
   }
 
   return {
-    overallScore: Math.min(98, Math.max(15, overallScore)),
+    overallScore: Math.min(98, Math.max(35, overallScore)),
     keywordMatchScore,
     formattingScore,
     actionVerbScore,
